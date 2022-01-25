@@ -34,6 +34,12 @@ export class AMQPSubscriber {
     };
   }
 
+  public async close() {
+    if (this.channel) {
+      await this.channel.close();
+    }
+  }
+
   public async subscribe(
     routingKey: string,
     action: (routingKey: string, content: any, message: amqp.ConsumeMessage | null) => void,

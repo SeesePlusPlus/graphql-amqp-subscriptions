@@ -45,6 +45,12 @@ export class AMQPPubSub implements PubSubEngine {
     logger('Finished initializing');
   }
 
+  public async close() {
+    await this.unsubscribeAll();
+    await this.publisher.close();
+    await this.subscriber.close();
+  }
+
   public async publish(routingKey: string, payload: any, options?: amqp.Options.Publish): Promise<void> {
     logger('Publishing message to exchange "%s" for key "%s" (%j)', this.exchange.name, routingKey, payload);
     return this.publisher.publish(routingKey, payload, options);
@@ -118,6 +124,13 @@ export class AMQPPubSub implements PubSubEngine {
     delete this.subscriptionMap[subId];
   }
 
+  public async unsubscribeAll(): Promise<void> {
+    const subscriptionKeys = Object.keys(this.unsubscribeMap);
+    await Promise.all(
+      subscriptionKeys.map(routingKey => this.unsubscribeForKey(routingKey))
+    );
+  }
+
   public asyncIterator<T>(triggers: string | string[]): AsyncIterator<T> {
     return new PubSubAsyncIterator<T>(this, triggers);
   }
@@ -141,6 +154,15 @@ export class AMQPPubSub implements PubSubEngine {
 
   private async unsubscribeForKey(routingKey: string): Promise<void> {
     const dispose = this.unsubscribeMap[routingKey];
+
+    if (!dispose) {
+      // It's possible for someone to call AMQPPubSub.close() which unsubscribes all keys
+      // while someone else is trying unsubscribe, causing us to get here twice. Regardless,
+      // checking if dispose is valid is a good check.
+      logger('unsubscribeForKey attempted to unsubscribe to a routing key that no longer exists: "%s"', routingKey);
+      return;
+    }
+
     delete this.unsubscribeMap[routingKey];
     delete this.subsRefsMap[routingKey];
     await dispose();

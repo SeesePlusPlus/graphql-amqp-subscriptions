@@ -24,6 +24,12 @@ export class AMQPPublisher {
     };
   }
 
+  public async close() {
+    if (this.channel) {
+      await this.channel.close();
+    }
+  }
+
   public async publish(routingKey: string, data: any, options?: amqp.Options.Publish): Promise<void> {
     const channel = await this.getOrCreateChannel();
     await channel.assertExchange(this.exchange.name, this.exchange.type, this.exchange.options);
